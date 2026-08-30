@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>API Endpoint</title>
+</head>
+<body style="background: #1e1e1e; color: #4af626; font-family: monospace; padding: 20px;">
+
+  <pre id="json-response">{"status": "processing"}</pre>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getDatabase, ref, push } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBbhOweEMmxYrlXiIlC830xKxbISfbqYSg",
+      authDomain: "james-allied---mycard.firebaseapp.com",
+      projectId: "james-allied---mycard",
+      storageBucket: "james-allied---mycard.firebasestorage.app",
+      messagingSenderId: "632988788605",
+      appId: "1:632988788605:web:c5cbfc6b1be3c10002ce14",
+      measurementId: "G-3K908YRJ79"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const output = document.getElementById("json-response");
+
+    function respond(data) {
+      output.textContent = JSON.stringify(data, null, 2);
+    }
+
+    async function handleApiRequest() {
+      const params = new URLSearchParams(window.location.search);
+      const card = params.get("card");
+      const amount = parseFloat(params.get("amount"));
+      const description = params.get("desc") || "API Charge";
+
+      // Parameter Validation
+      if (!card || isNaN(amount)) {
+        respond({
+          status: "error",
+          message: "Missing required parameters. Format: ?card=CARD_NUMBER&amount=AMOUNT&desc=DESCRIPTION"
+        });
+        return;
+      }
+
+      try {
+        const targetRef = ref(db, `transactions/${card}`);
+        const newTx = await push(targetRef, {
+          amount: amount,
+          description: description,
+          timestamp: Date.now()
+        });
+
+        respond({
+          status: "success",
+          transaction_id: newTx.key,
+          card_number: card,
+          amount: amount,
+          description: description,
+          timestamp: new Date().toISOString()
+        });
+      } catch (err) {
+        respond({
+          status: "error",
+          message: "Failed to record transaction",
+          details: err.message
+        });
+      }
+    }
+
+    handleApiRequest();
+  </script>
+</body>
+</html>
