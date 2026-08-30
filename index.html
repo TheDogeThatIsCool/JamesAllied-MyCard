@@ -120,17 +120,61 @@
     .btn-freeze.frozen {
       background-color: #2563eb;
     }
-    .btn-danger {
-      background-color: #dc2626;
-    }
-    .btn-danger:hover {
-      background-color: #b91c1c;
+    .btn-scan {
+      background-color: #0d9488;
+      margin-top: 5px;
     }
     .hidden { display: none; }
     .error-msg {
       font-size: 14px;
       margin-top: 10px;
       text-align: center;
+    }
+
+    /* Camera Scanner Modal Styles */
+    .scanner-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0,0,0,0.85);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    .scanner-container {
+      position: relative;
+      width: 90%;
+      max-width: 400px;
+      background: #000;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    video {
+      width: 100%;
+      height: 260px;
+      object-fit: cover;
+    }
+    .scan-guide {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 80%;
+      height: 60px;
+      border: 2px dashed #00ff66;
+      border-radius: 8px;
+      pointer-events: none;
+    }
+    .scanner-controls {
+      display: flex;
+      gap: 10px;
+      width: 90%;
+      max-width: 400px;
+      margin-top: 15px;
     }
 
     /* Tablet/Mobile POS Mode Default (Screen <= 1024px) */
@@ -184,6 +228,7 @@
       }
     }
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 </head>
 <body>
 
@@ -194,6 +239,7 @@
       <div class="form-group">
         <label for="card-number">Card Number</label>
         <input type="text" id="card-number" placeholder="Enter Card Number" required>
+        <button type="button" id="login-scan-btn" class="btn-scan">📷 Scan Card Number</button>
       </div>
       <div class="form-group">
         <label for="pin">PIN</label>
@@ -234,13 +280,15 @@
         <div class="form-group">
           <label class="pos-label" for="pos-card">Card Number</label>
           <input type="text" id="pos-card" class="pos-input" placeholder="Scan or Enter Card #">
+          <button type="button" id="pos-scan-btn" class="pos-btn btn-scan">📷 Scan Card</button>
         </div>
         <div class="form-group">
           <label class="pos-label" for="pos-location">Terminal Location</label>
           <select id="pos-location" class="pos-input">
-            <option value="Code Ninjas">Code Ninjas</option>
-            <option value="Mobile">Mobile</option>
-            <option value="James Allied Location">Kiosk A (West)</option>
+            <option value="Main Register">Main Register</option>
+            <option value="Cafeteria">Cafeteria Terminal</option>
+            <option value="Kiosk A">Kiosk A (West)</option>
+            <option value="Kiosk B">Kiosk B (East)</option>
           </select>
         </div>
         <div class="form-group">
@@ -273,6 +321,20 @@
     </div>
   </div>
 
+  <div id="scanner-modal" class="scanner-modal hidden">
+    <div class="scanner-container">
+      <video id="scanner-video" autoplay playsinline></video>
+      <div class="scan-guide"></div>
+    </div>
+    <div style="color: #fff; margin-top: 10px; font-size: 14px;" id="scanner-status">Align numbers inside box...</div>
+    <div class="scanner-controls">
+      <button type="button" id="scanner-capture-btn" style="background-color: #16a34a;">Capture & Read</button>
+      <button type="button" id="scanner-close-btn" style="background-color: #666;">Cancel</button>
+    </div>
+  </div>
+
+  <canvas id="scanner-canvas" class="hidden"></canvas>
+
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
@@ -304,6 +366,8 @@
     const adminMsg = document.getElementById('admin-msg');
 
     let currentCardNumber = null;
+    let targetInputForScan = null;
+    let videoStream = null;
 
     function showView(view) {
       viewLogin.classList.add('hidden');
@@ -346,7 +410,6 @@
     document.getElementById('admin-logout').addEventListener('click', () => signOut(auth));
 
     function loadUserDashboard(cardNumber) {
-      // Check frozen status
       onValue(ref(db, `cards/${cardNumber}/isFrozen`), (snapshot) => {
         if (snapshot.val() === true) {
           freezeBanner.classList.remove('hidden');
@@ -355,7 +418,6 @@
         }
       });
 
-      // Load transactions
       onValue(ref(db, `transactions/${cardNumber}`), (snapshot) => {
         transactionHistory.innerHTML = '';
         let balance = 0;
@@ -390,13 +452,11 @@
       });
     }
 
-    // Helper for Admin Actions
     async function recordTransaction(card, amount, desc, location = 'Admin Panel') {
       if (!card || isNaN(amount) || amount === 0) {
         throw new Error('Please fill in a valid Card Number and Amount.');
       }
 
-      // Verify if card is frozen
       const freezeSnap = await get(ref(db, `cards/${card}/isFrozen`));
       if (freezeSnap.val() === true) {
         throw new Error('Transaction declined: This card is currently frozen.');
@@ -415,7 +475,6 @@
       adminMsg.textContent = text;
     }
 
-    // POS Deposit
     document.getElementById('btn-deposit').addEventListener('click', async () => {
       const card = document.getElementById('pos-card').value.trim();
       const amount = Math.abs(parseFloat(document.getElementById('pos-amount').value));
@@ -430,7 +489,6 @@
       }
     });
 
-    // POS Withdraw
     document.getElementById('btn-withdraw').addEventListener('click', async () => {
       const card = document.getElementById('pos-card').value.trim();
       const amount = -Math.abs(parseFloat(document.getElementById('pos-amount').value));
@@ -445,7 +503,6 @@
       }
     });
 
-    // Manual Custom Transaction
     document.getElementById('admin-manual-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const card = document.getElementById('manage-card').value.trim();
@@ -461,7 +518,6 @@
       }
     });
 
-    // Freeze / Unfreeze Toggle
     document.getElementById('btn-toggle-freeze').addEventListener('click', async () => {
       const card = document.getElementById('manage-card').value.trim() || document.getElementById('pos-card').value.trim();
       if (!card) {
@@ -475,6 +531,67 @@
       
       await set(cardRef, !currentState);
       setAdminMessage(`Card ${card} is now ${!currentState ? 'FROZEN' : 'UNFROZEN'}.`);
+    });
+
+    // CAMERA SCANNER FUNCTIONALITY (DIGIT OCR ONLY)
+    const scannerModal = document.getElementById('scanner-modal');
+    const scannerVideo = document.getElementById('scanner-video');
+    const scannerStatus = document.getElementById('scanner-status');
+    const scannerCanvas = document.getElementById('scanner-canvas');
+
+    async function openScanner(targetInputElement) {
+      targetInputForScan = targetInputElement;
+      scannerModal.classList.remove('hidden');
+      scannerStatus.textContent = "Align card numbers inside box...";
+
+      try {
+        videoStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment' }
+        });
+        scannerVideo.srcObject = videoStream;
+      } catch (err) {
+        alert('Camera access denied or unavailable.');
+        closeScanner();
+      }
+    }
+
+    function closeScanner() {
+      if (videoStream) {
+        videoStream.getTracks().forEach(track => track.stop());
+      }
+      scannerModal.classList.add('hidden');
+    }
+
+    document.getElementById('login-scan-btn').addEventListener('click', () => openScanner(document.getElementById('card-number')));
+    document.getElementById('pos-scan-btn').addEventListener('click', () => openScanner(document.getElementById('pos-card')));
+    document.getElementById('scanner-close-btn').addEventListener('click', closeScanner);
+
+    document.getElementById('scanner-capture-btn').addEventListener('click', async () => {
+      scannerStatus.textContent = "Processing digits...";
+
+      // Draw current video frame to hidden canvas
+      const context = scannerCanvas.getContext('2d');
+      scannerCanvas.width = scannerVideo.videoWidth;
+      scannerCanvas.height = scannerVideo.videoHeight;
+      context.drawImage(scannerVideo, 0, 0, scannerCanvas.width, scannerCanvas.height);
+
+      // Perform OCR strict to digits only
+      try {
+        const { data: { text } } = await Tesseract.recognize(scannerCanvas, 'eng', {
+          tessedit_char_whitelist: '0123456789'
+        });
+
+        const digitsOnly = text.replace(/\D/g, '');
+
+        if (digitsOnly.length > 0 && targetInputForScan) {
+          targetInputForScan.value = digitsOnly;
+          closeScanner();
+        } else {
+          scannerStatus.textContent = "No numbers found. Try again.";
+        }
+      } catch (err) {
+        scannerStatus.textContent = "Failed to process image.";
+      }
     });
   </script>
 </body>
