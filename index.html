@@ -26,11 +26,11 @@
       border-radius: 12px;
       box-shadow: 0 4px 12px rgba(0,0,0,0.1);
       width: 100%;
-      max-width: 480px;
+      max-width: 500px;
       padding: 24px;
       margin-bottom: 20px;
     }
-    h1, h2 {
+    h1, h2, h3 {
       text-align: center;
       margin-bottom: 20px;
       color: #1a1a1a;
@@ -51,7 +51,7 @@
       font-weight: 600;
       font-size: 14px;
     }
-    input {
+    input, select {
       width: 100%;
       padding: 10px;
       border: 1px solid #ccc;
@@ -88,6 +88,8 @@
     }
     .transaction-list {
       list-style: none;
+      max-height: 250px;
+      overflow-y: auto;
     }
     .transaction-item {
       display: flex;
@@ -95,17 +97,9 @@
       padding: 12px 0;
       border-bottom: 1px solid #eee;
     }
-    .transaction-item:last-child {
-      border-bottom: none;
-    }
-    .positive {
-      color: #2e7d32;
-      font-weight: bold;
-    }
-    .negative {
-      color: #c62828;
-      font-weight: bold;
-    }
+    .positive { color: #2e7d32; font-weight: bold; }
+    .negative { color: #c62828; font-weight: bold; }
+    
     .nav-bar {
       display: flex;
       justify-content: space-between;
@@ -119,14 +113,75 @@
       font-size: 12px;
       margin-top: 0;
     }
-    .hidden {
-      display: none;
+    .btn-freeze {
+      background-color: #d97706;
+      margin-top: 5px;
     }
+    .btn-freeze.frozen {
+      background-color: #2563eb;
+    }
+    .btn-danger {
+      background-color: #dc2626;
+    }
+    .btn-danger:hover {
+      background-color: #b91c1c;
+    }
+    .hidden { display: none; }
     .error-msg {
-      color: #c62828;
       font-size: 14px;
       margin-top: 10px;
       text-align: center;
+    }
+
+    /* Tablet/Mobile POS Mode Default (Screen <= 1024px) */
+    @media (max-width: 1024px) {
+      .card-container.admin-panel {
+        max-width: 100%;
+        padding: 20px;
+      }
+      .pos-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+      }
+      .pos-btn {
+        padding: 20px;
+        font-size: 18px;
+        min-height: 70px;
+        border-radius: 10px;
+      }
+      .pos-input {
+        padding: 16px;
+        font-size: 18px;
+      }
+      .pos-label {
+        font-size: 16px;
+      }
+      .admin-section {
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+      }
+    }
+
+    /* Desktop View Mode (> 1024px) */
+    @media (min-width: 1025px) {
+      .card-container.admin-panel {
+        max-width: 900px;
+      }
+      .admin-layout {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+      }
+      .admin-section {
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        padding: 15px;
+        border-radius: 8px;
+      }
     }
   </style>
 </head>
@@ -145,7 +200,7 @@
         <input type="password" id="pin" placeholder="Enter PIN" required>
       </div>
       <button type="submit">Sign In</button>
-      <div id="login-error" class="error-msg"></div>
+      <div id="login-error" class="error-msg" style="color: #c62828;"></div>
     </form>
   </div>
 
@@ -154,43 +209,75 @@
       <span>Welcome, <strong id="user-display"></strong></span>
       <button id="user-logout" class="logout-btn">Logout</button>
     </div>
+    <div id="freeze-banner" class="hidden" style="background: #fef3c7; color: #92400e; padding: 10px; border-radius: 6px; text-align: center; margin-bottom: 15px; font-weight: bold;">
+      ⚠️ Your card is currently FROZEN.
+    </div>
     <div class="balance-card">
       <div>Available Balance</div>
       <div class="balance-amount"><span id="balance-value">0</span> Tokens</div>
     </div>
     <h2>Transaction History</h2>
-    <ul id="transaction-history" class="transaction-list">
-      </ul>
+    <ul id="transaction-history" class="transaction-list"></ul>
   </div>
 
-  <div id="view-admin" class="card-container hidden">
+  <div id="view-admin" class="card-container admin-panel hidden">
     <div class="nav-bar">
-      <span><strong>Admin Portal</strong></span>
+      <span><strong>Admin POS & Management</strong></span>
       <button id="admin-logout" class="logout-btn">Logout</button>
     </div>
-    <h2>Create Transaction</h2>
-    <form id="admin-form">
-      <div class="form-group">
-        <label for="admin-target-card">Target Card Number</label>
-        <input type="text" id="admin-target-card" placeholder="e.g. 123456" required>
+
+    <div id="admin-msg" class="error-msg" style="margin-bottom: 15px;"></div>
+
+    <div class="admin-layout">
+      <div class="admin-section">
+        <h3>Location Terminal (POS)</h3>
+        <div class="form-group">
+          <label class="pos-label" for="pos-card">Card Number</label>
+          <input type="text" id="pos-card" class="pos-input" placeholder="Scan or Enter Card #">
+        </div>
+        <div class="form-group">
+          <label class="pos-label" for="pos-location">Terminal Location</label>
+          <select id="pos-location" class="pos-input">
+            <option value="Main Register">Main Register</option>
+            <option value="Cafeteria">Cafeteria Terminal</option>
+            <option value="Kiosk A">Kiosk A (West)</option>
+            <option value="Kiosk B">Kiosk B (East)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="pos-label" for="pos-amount">Amount (Tokens)</label>
+          <input type="number" id="pos-amount" class="pos-input" placeholder="0">
+        </div>
+        <div class="pos-grid">
+          <button type="button" id="btn-deposit" class="pos-btn" style="background-color: #16a34a;">+ Deposit</button>
+          <button type="button" id="btn-withdraw" class="pos-btn" style="background-color: #dc2626;">- Withdraw</button>
+        </div>
       </div>
-      <div class="form-group">
-        <label for="admin-amount">Amount (+ or - Tokens)</label>
-        <input type="number" id="admin-amount" placeholder="e.g. 100 or -50" required>
+
+      <div class="admin-section">
+        <h3>Account Management</h3>
+        <div class="form-group">
+          <label class="pos-label" for="manage-card">Target Card Number</label>
+          <input type="text" id="manage-card" class="pos-input" placeholder="Enter Card Number">
+        </div>
+        <button type="button" id="btn-toggle-freeze" class="pos-btn btn-freeze">Freeze / Unfreeze Card</button>
+
+        <h3 style="margin-top: 20px;">Manual Transaction</h3>
+        <form id="admin-manual-form">
+          <div class="form-group">
+            <label for="admin-desc">Custom Reason / Notes</label>
+            <input type="text" id="admin-desc" class="pos-input" placeholder="e.g. System adjustment" required>
+          </div>
+          <button type="submit" class="pos-btn" style="background-color: #4f46e5;">Submit Adjustment</button>
+        </form>
       </div>
-      <div class="form-group">
-        <label for="admin-desc">Description</label>
-        <input type="text" id="admin-desc" placeholder="e.g. Reward / Purchase" required>
-      </div>
-      <button type="submit">Submit Transaction</button>
-      <div id="admin-msg" class="error-msg" style="color: #2e7d32;"></div>
-    </form>
+    </div>
   </div>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-    import { getDatabase, ref, push, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+    import { getDatabase, ref, push, onValue, set, get } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBbhOweEMmxYrlXiIlC830xKxbISfbqYSg",
@@ -206,7 +293,6 @@
     const auth = getAuth(app);
     const db = getDatabase(app);
 
-    // DOM Elements
     const viewLogin = document.getElementById('view-login');
     const viewDashboard = document.getElementById('view-dashboard');
     const viewAdmin = document.getElementById('view-admin');
@@ -215,12 +301,11 @@
     const userDisplay = document.getElementById('user-display');
     const balanceValue = document.getElementById('balance-value');
     const transactionHistory = document.getElementById('transaction-history');
-    const adminForm = document.getElementById('admin-form');
+    const freezeBanner = document.getElementById('freeze-banner');
     const adminMsg = document.getElementById('admin-msg');
 
     let currentCardNumber = null;
 
-    // View Switcher
     function showView(view) {
       viewLogin.classList.add('hidden');
       viewDashboard.classList.add('hidden');
@@ -228,11 +313,9 @@
       view.classList.remove('hidden');
     }
 
-    // Login Handler
     loginForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       loginError.textContent = '';
-      
       const cardNumber = document.getElementById('card-number').value.trim();
       const pin = document.getElementById('pin').value;
       const email = `${cardNumber}@mycard.jamesallied.us`;
@@ -244,11 +327,9 @@
       }
     });
 
-    // Auth State Monitor
     onAuthStateChanged(auth, (user) => {
       if (user) {
         currentCardNumber = user.email.split('@')[0];
-        
         if (currentCardNumber === 'admin') {
           showView(viewAdmin);
         } else {
@@ -262,14 +343,21 @@
       }
     });
 
-    // Logout Handlers
     document.getElementById('user-logout').addEventListener('click', () => signOut(auth));
     document.getElementById('admin-logout').addEventListener('click', () => signOut(auth));
 
-    // Dashboard Data Listener
     function loadUserDashboard(cardNumber) {
-      const txRef = ref(db, `transactions/${cardNumber}`);
-      onValue(txRef, (snapshot) => {
+      // Check frozen status
+      onValue(ref(db, `cards/${cardNumber}/isFrozen`), (snapshot) => {
+        if (snapshot.val() === true) {
+          freezeBanner.classList.remove('hidden');
+        } else {
+          freezeBanner.classList.add('hidden');
+        }
+      });
+
+      // Load transactions
+      onValue(ref(db, `transactions/${cardNumber}`), (snapshot) => {
         transactionHistory.innerHTML = '';
         let balance = 0;
 
@@ -281,7 +369,6 @@
 
             const li = document.createElement('li');
             li.className = 'transaction-item';
-            
             const isPositive = amount >= 0;
             const sign = isPositive ? '+' : '';
             const amountClass = isPositive ? 'positive' : 'negative';
@@ -289,7 +376,7 @@
             li.innerHTML = `
               <div>
                 <strong>${tx.description}</strong><br>
-                <small style="color:#888;">${new Date(tx.timestamp).toLocaleDateString()}</small>
+                <small style="color:#888;">${tx.location ? tx.location + ' • ' : ''}${new Date(tx.timestamp).toLocaleString()}</small>
               </div>
               <div class="${amountClass}">
                 ${sign}${amount} Tokens
@@ -300,35 +387,95 @@
         } else {
           transactionHistory.innerHTML = '<li class="transaction-item">No past transactions found.</li>';
         }
-
         balanceValue.textContent = balance;
       });
     }
 
-    // Admin Create Transaction Handler
-    adminForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      adminMsg.textContent = '';
+    // Helper for Admin Actions
+    async function recordTransaction(card, amount, desc, location = 'Admin Panel') {
+      if (!card || isNaN(amount) || amount === 0) {
+        throw new Error('Please fill in a valid Card Number and Amount.');
+      }
 
-      const targetCard = document.getElementById('admin-target-card').value.trim();
-      const amount = parseFloat(document.getElementById('admin-amount').value);
-      const description = document.getElementById('admin-desc').value.trim();
+      // Verify if card is frozen
+      const freezeSnap = await get(ref(db, `cards/${card}/isFrozen`));
+      if (freezeSnap.val() === true) {
+        throw new Error('Transaction declined: This card is currently frozen.');
+      }
+
+      await push(ref(db, `transactions/${card}`), {
+        amount: amount,
+        description: desc,
+        location: location,
+        timestamp: Date.now()
+      });
+    }
+
+    function setAdminMessage(text, isError = false) {
+      adminMsg.style.color = isError ? '#c62828' : '#2e7d32';
+      adminMsg.textContent = text;
+    }
+
+    // POS Deposit
+    document.getElementById('btn-deposit').addEventListener('click', async () => {
+      const card = document.getElementById('pos-card').value.trim();
+      const amount = Math.abs(parseFloat(document.getElementById('pos-amount').value));
+      const location = document.getElementById('pos-location').value;
 
       try {
-        const targetRef = ref(db, `transactions/${targetCard}`);
-        await push(targetRef, {
-          amount: amount,
-          description: description,
-          timestamp: Date.now()
-        });
-
-        adminMsg.style.color = '#2e7d32';
-        adminMsg.textContent = 'Transaction recorded successfully!';
-        adminForm.reset();
+        await recordTransaction(card, amount, `Deposit at ${location}`, location);
+        setAdminMessage(`Successfully deposited ${amount} tokens to card ${card}.`);
+        document.getElementById('pos-amount').value = '';
       } catch (err) {
-        adminMsg.style.color = '#c62828';
-        adminMsg.textContent = 'Failed to create transaction.';
+        setAdminMessage(err.message, true);
       }
+    });
+
+    // POS Withdraw
+    document.getElementById('btn-withdraw').addEventListener('click', async () => {
+      const card = document.getElementById('pos-card').value.trim();
+      const amount = -Math.abs(parseFloat(document.getElementById('pos-amount').value));
+      const location = document.getElementById('pos-location').value;
+
+      try {
+        await recordTransaction(card, amount, `Withdrawal at ${location}`, location);
+        setAdminMessage(`Successfully withdrew ${Math.abs(amount)} tokens from card ${card}.`);
+        document.getElementById('pos-amount').value = '';
+      } catch (err) {
+        setAdminMessage(err.message, true);
+      }
+    });
+
+    // Manual Custom Transaction
+    document.getElementById('admin-manual-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const card = document.getElementById('manage-card').value.trim();
+      const amount = parseFloat(document.getElementById('pos-amount').value);
+      const desc = document.getElementById('admin-desc').value.trim();
+
+      try {
+        await recordTransaction(card, amount, desc);
+        setAdminMessage(`Transaction recorded for card ${card}.`);
+        document.getElementById('admin-desc').value = '';
+      } catch (err) {
+        setAdminMessage(err.message, true);
+      }
+    });
+
+    // Freeze / Unfreeze Toggle
+    document.getElementById('btn-toggle-freeze').addEventListener('click', async () => {
+      const card = document.getElementById('manage-card').value.trim() || document.getElementById('pos-card').value.trim();
+      if (!card) {
+        setAdminMessage('Please enter a target Card Number to freeze/unfreeze.', true);
+        return;
+      }
+
+      const cardRef = ref(db, `cards/${card}/isFrozen`);
+      const snapshot = await get(cardRef);
+      const currentState = snapshot.val() === true;
+      
+      await set(cardRef, !currentState);
+      setAdminMessage(`Card ${card} is now ${!currentState ? 'FROZEN' : 'UNFROZEN'}.`);
     });
   </script>
 </body>
