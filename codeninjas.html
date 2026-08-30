@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Code Ninjas - MyCard Token Portal</title>
+  
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/pure-min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/grids-responsive-min.css">
+
+  <style>
+    body {
+      background-color: #f4f6f8;
+      color: #333;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      padding: 20px;
+    }
+
+    .main-container {
+      max-width: 600px;
+      margin: 40px auto;
+      background: #ffffff;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+
+    .header-logo {
+      text-align: center;
+      margin-bottom: 25px;
+    }
+
+    .header-logo h1 {
+      margin: 0;
+      color: #000000;
+      font-weight: 800;
+      font-size: 28px;
+      letter-spacing: -0.5px;
+    }
+
+    .header-logo h1 span {
+      color: #e61c24; /* Code Ninjas Red Accent */
+    }
+
+    .header-logo p {
+      margin-top: 5px;
+      color: #666;
+      font-size: 14px;
+    }
+
+    .pure-form label {
+      font-weight: 600;
+      margin-top: 15px;
+      margin-bottom: 5px;
+      color: #444;
+    }
+
+    .pure-form input, .pure-form select {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 10px 12px !important;
+      border-radius: 6px !important;
+      font-size: 15px !important;
+    }
+
+    .button-ninja {
+      background: #e61c24;
+      color: white;
+      border-radius: 6px;
+      font-weight: bold;
+      font-size: 16px;
+      padding: 12px;
+      width: 100%;
+      margin-top: 20px;
+      transition: background 0.2s ease;
+    }
+
+    .button-ninja:hover {
+      background: #c2151c;
+    }
+
+    .status-card {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 6px;
+      font-weight: 600;
+      text-align: center;
+      display: none;
+    }
+
+    .status-card.success {
+      background-color: #d1e7dd;
+      color: #0f5132;
+      border: 1px solid #badbcc;
+    }
+
+    .status-card.error {
+      background-color: #f8d7da;
+      color: #842029;
+      border: 1px solid #f5c2c7;
+    }
+
+    /* Responsive adjustments for tablet/mobile viewports */
+    @media (max-width: 768px) {
+      .main-container {
+        margin: 10px auto;
+        padding: 20px;
+      }
+      .button-ninja {
+        padding: 16px;
+        font-size: 18px;
+      }
+      .pure-form input, .pure-form select {
+        padding: 14px 12px !important;
+        font-size: 16px !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="main-container">
+    <div class="header-logo">
+      <h1>CODE NINJAS <span>// MyCard</span></h1>
+      <p>Sensei Token Rewards & Deposit Terminal</p>
+    </div>
+
+    <form class="pure-form pure-form-stacked" id="reward-form">
+      <fieldset>
+        <label for="ninja-card">Ninja Card Number</label>
+        <input type="text" id="ninja-card" placeholder="e.g. 100245" required>
+
+        <label for="ninja-location">Dojo Location</label>
+        <select id="ninja-location" required>
+          <option value="Code Ninjas Dojo">Main Dojo</option>
+          <option value="Code Ninjas Arena">Robotics Arena</option>
+          <option value="Code Ninjas Station 1">Sensei Station 1</option>
+          <option value="Code Ninjas Station 2">Sensei Station 2</option>
+        </select>
+
+        <label for="token-amount">James Tokens Amount (+)</label>
+        <input type="number" id="token-amount" placeholder="e.g. 25" min="1" step="1" required>
+
+        <label for="reward-reason">Award Reason</label>
+        <select id="reward-reason">
+          <option value="Belt Promotion">Belt Promotion</option>
+          <option value="Belt Stripe Earned">Belt Stripe Earned</option>
+          <option value="Ninja of the Month">Ninja of the Month</option>
+          <option value="Completed STEM Challenge">Completed STEM Challenge</option>
+          <option value="Dojo Store Deposit">Dojo Store Deposit</option>
+        </select>
+
+        <button type="submit" class="pure-button button-ninja">Award Tokens</button>
+      </fieldset>
+    </form>
+
+    <div id="status-box" class="status-card"></div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getDatabase, ref, push, get } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBbhOweEMmxYrlXiIlC830xKxbISfbqYSg",
+      authDomain: "james-allied---mycard.firebaseapp.com",
+      projectId: "james-allied---mycard",
+      storageBucket: "james-allied---mycard.firebasestorage.app",
+      messagingSenderId: "632988788605",
+      appId: "1:632988788605:web:c5cbfc6b1be3c10002ce14",
+      measurementId: "G-3K908YRJ79"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    const form = document.getElementById('reward-form');
+    const statusBox = document.getElementById('status-box');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      statusBox.style.display = 'none';
+      statusBox.className = 'status-card';
+
+      const card = document.getElementById('ninja-card').value.trim();
+      const amount = Math.abs(parseFloat(document.getElementById('token-amount').value));
+      const location = document.getElementById('ninja-location').value;
+      const reason = document.getElementById('reward-reason').value;
+
+      try {
+        // 1. Check if the card is frozen before issuing reward
+        const freezeSnap = await get(ref(db, `cards/${card}/isFrozen`));
+        if (freezeSnap.exists() && freezeSnap.val() === true) {
+          throw new Error("Cannot deposit tokens: Card is currently frozen.");
+        }
+
+        // 2. Push deposit transaction into Firebase Realtime Database
+        const targetRef = ref(db, `transactions/${card}`);
+        await push(targetRef, {
+          amount: amount,
+          description: `Reward: ${reason}`,
+          location: location,
+          timestamp: Date.now()
+        });
+
+        statusBox.textContent = `Successfully added ${amount} Tokens to Ninja Card #${card}!`;
+        statusBox.classList.add('success');
+        statusBox.style.display = 'block';
+
+        form.reset();
+      } catch (err) {
+        statusBox.textContent = err.message || "Failed to issue tokens.";
+        statusBox.classList.add('error');
+        statusBox.style.display = 'block';
+      }
+    });
+  </script>
+</body>
+</html>
