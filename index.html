@@ -117,14 +117,11 @@
       background-color: #d97706;
       margin-top: 5px;
     }
-    .btn-freeze.frozen {
-      background-color: #2563eb;
-    }
     .btn-scan {
       background-color: #0d9488;
       margin-top: 5px;
     }
-    .hidden { display: none; }
+    .hidden { display: none !important; }
     .error-msg {
       font-size: 14px;
       margin-top: 10px;
@@ -232,6 +229,7 @@
 </head>
 <body>
 
+  <!-- VIEW 1: LOGIN -->
   <div id="view-login" class="card-container">
     <h1>MyCard</h1>
     <p class="subtitle">by James Allied</p>
@@ -250,6 +248,7 @@
     </form>
   </div>
 
+  <!-- VIEW 2: USER DASHBOARD -->
   <div id="view-dashboard" class="card-container hidden">
     <div class="nav-bar">
       <span>Welcome, <strong id="user-display"></strong></span>
@@ -266,6 +265,7 @@
     <ul id="transaction-history" class="transaction-list"></ul>
   </div>
 
+  <!-- VIEW 3: ADMIN PANEL -->
   <div id="view-admin" class="card-container admin-panel hidden">
     <div class="nav-bar">
       <span><strong>Admin POS & Management</strong></span>
@@ -275,6 +275,7 @@
     <div id="admin-msg" class="error-msg" style="margin-bottom: 15px;"></div>
 
     <div class="admin-layout">
+      <!-- Section 1: Kiosk / Location Terminal -->
       <div class="admin-section">
         <h3>Location Terminal (POS)</h3>
         <div class="form-group">
@@ -301,6 +302,7 @@
         </div>
       </div>
 
+      <!-- Section 2: Account Controls & Quick Actions -->
       <div class="admin-section">
         <h3>Account Management</h3>
         <div class="form-group">
@@ -321,6 +323,7 @@
     </div>
   </div>
 
+  <!-- CAMERA SCANNER MODAL -->
   <div id="scanner-modal" class="scanner-modal hidden">
     <div class="scanner-container">
       <video id="scanner-video" autoplay playsinline></video>
@@ -335,6 +338,7 @@
 
   <canvas id="scanner-canvas" class="hidden"></canvas>
 
+  <!-- FIREBASE SDKs -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
@@ -533,7 +537,7 @@
       setAdminMessage(`Card ${card} is now ${!currentState ? 'FROZEN' : 'UNFROZEN'}.`);
     });
 
-    // CAMERA SCANNER FUNCTIONALITY (DIGIT OCR ONLY)
+    // CAMERA SCANNER CONTROL
     const scannerModal = document.getElementById('scanner-modal');
     const scannerVideo = document.getElementById('scanner-video');
     const scannerStatus = document.getElementById('scanner-status');
@@ -558,7 +562,9 @@
     function closeScanner() {
       if (videoStream) {
         videoStream.getTracks().forEach(track => track.stop());
+        videoStream = null;
       }
+      scannerVideo.srcObject = null;
       scannerModal.classList.add('hidden');
     }
 
@@ -566,16 +572,20 @@
     document.getElementById('pos-scan-btn').addEventListener('click', () => openScanner(document.getElementById('pos-card')));
     document.getElementById('scanner-close-btn').addEventListener('click', closeScanner);
 
+    // MANUAL CAPTURE & OCR TRIGGER
     document.getElementById('scanner-capture-btn').addEventListener('click', async () => {
+      if (!videoStream || !scannerVideo.videoWidth) {
+        scannerStatus.textContent = "Camera stream not active.";
+        return;
+      }
+
       scannerStatus.textContent = "Processing digits...";
 
-      // Draw current video frame to hidden canvas
       const context = scannerCanvas.getContext('2d');
       scannerCanvas.width = scannerVideo.videoWidth;
       scannerCanvas.height = scannerVideo.videoHeight;
       context.drawImage(scannerVideo, 0, 0, scannerCanvas.width, scannerCanvas.height);
 
-      // Perform OCR strict to digits only
       try {
         const { data: { text } } = await Tesseract.recognize(scannerCanvas, 'eng', {
           tessedit_char_whitelist: '0123456789'
@@ -587,7 +597,7 @@
           targetInputForScan.value = digitsOnly;
           closeScanner();
         } else {
-          scannerStatus.textContent = "No numbers found. Try again.";
+          scannerStatus.textContent = "No numbers found. Try aligning again and capture.";
         }
       } catch (err) {
         scannerStatus.textContent = "Failed to process image.";
