@@ -225,56 +225,46 @@
       }
     }
 
-    /* Thermal Receipt Styling (58mm x 210mm) */
-    #receipt-container {
-      display: none;
+    /* Off-screen Receipt Area for Canvas Generation */
+    #receipt-offscreen {
+      position: absolute;
+      left: -9999px;
+      top: -9999px;
     }
-
-    @media print {
-      body * {
-        visibility: hidden;
-      }
-      #receipt-container, #receipt-container * {
-        visibility: visible;
-      }
-      #receipt-container {
-        display: block !important;
-        position: absolute;
-        left: 0;
-        top: 0;
-        width: 58mm;
-        height: 210mm;
-        padding: 4mm;
-        font-family: 'Courier New', Courier, monospace;
-        font-size: 12px;
-        color: #000;
-        background: #fff;
-        box-sizing: border-box;
-      }
-      .receipt-header, .receipt-footer {
-        text-align: center;
-      }
-      .receipt-title {
-        font-size: 14px;
-        font-weight: bold;
-        text-transform: uppercase;
-      }
-      .receipt-divider {
-        border-top: 1px dashed #000;
-        margin: 6px 0;
-      }
-      .receipt-row {
-        display: flex;
-        justify-content: space-between;
-        margin: 4px 0;
-      }
-      .receipt-total {
-        font-weight: bold;
-        font-size: 13px;
-      }
+    .receipt-box {
+      width: 300px;
+      padding: 16px;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 12px;
+      color: #000;
+      background: #fff;
+      box-sizing: border-box;
+    }
+    .receipt-header, .receipt-footer {
+      text-align: center;
+    }
+    .receipt-title {
+      font-size: 16px;
+      font-weight: bold;
+      text-transform: uppercase;
+    }
+    .receipt-divider {
+      border-top: 1px dashed #000;
+      margin: 8px 0;
+    }
+    .receipt-row {
+      display: flex;
+      justify-content: space-between;
+      margin: 5px 0;
+    }
+    .receipt-total {
+      font-weight: bold;
+      font-size: 14px;
     }
   </style>
+
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 <body>
 
@@ -331,10 +321,9 @@
         <div class="form-group">
           <label class="pos-label" for="pos-location">Terminal Location</label>
           <select id="pos-location" class="pos-input">
-            <option value="Main Register">Main Register</option>
-            <option value="Cafeteria">Cafeteria Terminal</option>
-            <option value="Kiosk A">Kiosk A (West)</option>
-            <option value="Kiosk B">Kiosk B (East)</option>
+            <option value="Code Ninjas">Code Ninjas</option>
+            <option value="JA Location">JA Location</option>
+            <option value="Mobile">Mobile</option>
           </select>
         </div>
         <div class="form-group">
@@ -381,38 +370,40 @@
 
   <canvas id="scanner-canvas" class="hidden"></canvas>
 
-  <div id="receipt-container">
-    <div class="receipt-header">
-      <div class="receipt-title">MYCARD</div>
-      <div>by James Allied</div>
-      <div id="rcpt-location">Location: -</div>
-    </div>
-    <div class="receipt-divider"></div>
-    <div class="receipt-row">
-      <span>Date:</span>
-      <span id="rcpt-date">-</span>
-    </div>
-    <div class="receipt-row">
-      <span>Type:</span>
-      <span id="rcpt-type" style="font-weight: bold;">-</span>
-    </div>
-    <div class="receipt-row">
-      <span>Card #:</span>
-      <span id="rcpt-card">-</span>
-    </div>
-    <div class="receipt-divider"></div>
-    <div class="receipt-row receipt-total">
-      <span>Amount:</span>
-      <span id="rcpt-amount">-</span>
-    </div>
-    <div class="receipt-row receipt-total">
-      <span>New Balance:</span>
-      <span id="rcpt-balance">-</span>
-    </div>
-    <div class="receipt-divider"></div>
-    <div class="receipt-footer">
-      <p>Thank you for using</p>
-      <p>James Tokens!</p>
+  <div id="receipt-offscreen">
+    <div id="receipt-box" class="receipt-box">
+      <div class="receipt-header">
+        <div class="receipt-title">MYCARD</div>
+        <div>by James Allied</div>
+        <div id="rcpt-location">Location: -</div>
+      </div>
+      <div class="receipt-divider"></div>
+      <div class="receipt-row">
+        <span>Date:</span>
+        <span id="rcpt-date">-</span>
+      </div>
+      <div class="receipt-row">
+        <span>Type:</span>
+        <span id="rcpt-type" style="font-weight: bold;">-</span>
+      </div>
+      <div class="receipt-row">
+        <span>Card #:</span>
+        <span id="rcpt-card">-</span>
+      </div>
+      <div class="receipt-divider"></div>
+      <div class="receipt-row receipt-total">
+        <span>Amount:</span>
+        <span id="rcpt-amount">-</span>
+      </div>
+      <div class="receipt-row receipt-total">
+        <span>New Balance:</span>
+        <span id="rcpt-balance">-</span>
+      </div>
+      <div class="receipt-divider"></div>
+      <div class="receipt-footer">
+        <p>Thank you for using</p>
+        <p>James Tokens!</p>
+      </div>
     </div>
   </div>
 
@@ -550,7 +541,6 @@
         timestamp: Date.now()
       });
 
-      // Calculate new cumulative balance for receipt
       const txSnap = await get(ref(db, `transactions/${card}`));
       let newBalance = 0;
       if (txSnap.exists()) {
@@ -560,7 +550,7 @@
       return newBalance;
     }
 
-    function printReceipt(type, card, amount, location, newBalance) {
+    async function downloadReceiptImage(type, card, amount, location, newBalance) {
       document.getElementById('rcpt-location').textContent = `Location: ${location}`;
       document.getElementById('rcpt-date').textContent = new Date().toLocaleString();
       document.getElementById('rcpt-type').textContent = type.toUpperCase();
@@ -568,7 +558,13 @@
       document.getElementById('rcpt-amount').textContent = `${amount > 0 ? '+' : ''}${amount} Tokens`;
       document.getElementById('rcpt-balance').textContent = `${newBalance} Tokens`;
 
-      window.print();
+      const receiptElement = document.getElementById('receipt-box');
+      const canvas = await html2canvas(receiptElement, { scale: 2 });
+      
+      const link = document.createElement('a');
+      link.download = `Receipt_${type}_${card}_${Date.now()}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
     }
 
     function setAdminMessage(text, isError = false) {
@@ -585,7 +581,7 @@
         const newBal = await recordTransaction(card, amount, `Deposit at ${location}`, location);
         setAdminMessage(`Successfully deposited ${amount} tokens to card ${card}.`);
         document.getElementById('pos-amount').value = '';
-        printReceipt('Deposit', card, amount, location, newBal);
+        await downloadReceiptImage('Deposit', card, amount, location, newBal);
       } catch (err) {
         setAdminMessage(err.message, true);
       }
@@ -600,7 +596,7 @@
         const newBal = await recordTransaction(card, amount, `Withdrawal at ${location}`, location);
         setAdminMessage(`Successfully withdrew ${Math.abs(amount)} tokens from card ${card}.`);
         document.getElementById('pos-amount').value = '';
-        printReceipt('Withdrawal', card, amount, location, newBal);
+        await downloadReceiptImage('Withdrawal', card, amount, location, newBal);
       } catch (err) {
         setAdminMessage(err.message, true);
       }
