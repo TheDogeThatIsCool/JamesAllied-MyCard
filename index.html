@@ -224,12 +224,60 @@
         border-radius: 8px;
       }
     }
+
+    /* Thermal Receipt Styling (58mm x 210mm) */
+    #receipt-container {
+      display: none;
+    }
+
+    @media print {
+      body * {
+        visibility: hidden;
+      }
+      #receipt-container, #receipt-container * {
+        visibility: visible;
+      }
+      #receipt-container {
+        display: block !important;
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 58mm;
+        height: 210mm;
+        padding: 4mm;
+        font-family: 'Courier New', Courier, monospace;
+        font-size: 12px;
+        color: #000;
+        background: #fff;
+        box-sizing: border-box;
+      }
+      .receipt-header, .receipt-footer {
+        text-align: center;
+      }
+      .receipt-title {
+        font-size: 14px;
+        font-weight: bold;
+        text-transform: uppercase;
+      }
+      .receipt-divider {
+        border-top: 1px dashed #000;
+        margin: 6px 0;
+      }
+      .receipt-row {
+        display: flex;
+        justify-content: space-between;
+        margin: 4px 0;
+      }
+      .receipt-total {
+        font-weight: bold;
+        font-size: 13px;
+      }
+    }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 </head>
 <body>
 
-  <!-- VIEW 1: LOGIN -->
   <div id="view-login" class="card-container">
     <h1>MyCard</h1>
     <p class="subtitle">by James Allied</p>
@@ -248,7 +296,6 @@
     </form>
   </div>
 
-  <!-- VIEW 2: USER DASHBOARD -->
   <div id="view-dashboard" class="card-container hidden">
     <div class="nav-bar">
       <span>Welcome, <strong id="user-display"></strong></span>
@@ -265,7 +312,6 @@
     <ul id="transaction-history" class="transaction-list"></ul>
   </div>
 
-  <!-- VIEW 3: ADMIN PANEL -->
   <div id="view-admin" class="card-container admin-panel hidden">
     <div class="nav-bar">
       <span><strong>Admin POS & Management</strong></span>
@@ -275,7 +321,6 @@
     <div id="admin-msg" class="error-msg" style="margin-bottom: 15px;"></div>
 
     <div class="admin-layout">
-      <!-- Section 1: Kiosk / Location Terminal -->
       <div class="admin-section">
         <h3>Location Terminal (POS)</h3>
         <div class="form-group">
@@ -286,8 +331,10 @@
         <div class="form-group">
           <label class="pos-label" for="pos-location">Terminal Location</label>
           <select id="pos-location" class="pos-input">
-            <option value="James Allied Location">JA LOCATION</option>
-            <option value="Code Ninjas">Code Ninjas</option>
+            <option value="Main Register">Main Register</option>
+            <option value="Cafeteria">Cafeteria Terminal</option>
+            <option value="Kiosk A">Kiosk A (West)</option>
+            <option value="Kiosk B">Kiosk B (East)</option>
           </select>
         </div>
         <div class="form-group">
@@ -300,7 +347,6 @@
         </div>
       </div>
 
-      <!-- Section 2: Account Controls & Quick Actions -->
       <div class="admin-section">
         <h3>Account Management</h3>
         <div class="form-group">
@@ -321,7 +367,6 @@
     </div>
   </div>
 
-  <!-- CAMERA SCANNER MODAL -->
   <div id="scanner-modal" class="scanner-modal hidden">
     <div class="scanner-container">
       <video id="scanner-video" autoplay playsinline></video>
@@ -336,7 +381,41 @@
 
   <canvas id="scanner-canvas" class="hidden"></canvas>
 
-  <!-- FIREBASE SDKs -->
+  <div id="receipt-container">
+    <div class="receipt-header">
+      <div class="receipt-title">MYCARD</div>
+      <div>by James Allied</div>
+      <div id="rcpt-location">Location: -</div>
+    </div>
+    <div class="receipt-divider"></div>
+    <div class="receipt-row">
+      <span>Date:</span>
+      <span id="rcpt-date">-</span>
+    </div>
+    <div class="receipt-row">
+      <span>Type:</span>
+      <span id="rcpt-type" style="font-weight: bold;">-</span>
+    </div>
+    <div class="receipt-row">
+      <span>Card #:</span>
+      <span id="rcpt-card">-</span>
+    </div>
+    <div class="receipt-divider"></div>
+    <div class="receipt-row receipt-total">
+      <span>Amount:</span>
+      <span id="rcpt-amount">-</span>
+    </div>
+    <div class="receipt-row receipt-total">
+      <span>New Balance:</span>
+      <span id="rcpt-balance">-</span>
+    </div>
+    <div class="receipt-divider"></div>
+    <div class="receipt-footer">
+      <p>Thank you for using</p>
+      <p>James Tokens!</p>
+    </div>
+  </div>
+
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
@@ -470,6 +549,26 @@
         location: location,
         timestamp: Date.now()
       });
+
+      // Calculate new cumulative balance for receipt
+      const txSnap = await get(ref(db, `transactions/${card}`));
+      let newBalance = 0;
+      if (txSnap.exists()) {
+        Object.values(txSnap.val()).forEach(t => newBalance += parseFloat(t.amount));
+      }
+
+      return newBalance;
+    }
+
+    function printReceipt(type, card, amount, location, newBalance) {
+      document.getElementById('rcpt-location').textContent = `Location: ${location}`;
+      document.getElementById('rcpt-date').textContent = new Date().toLocaleString();
+      document.getElementById('rcpt-type').textContent = type.toUpperCase();
+      document.getElementById('rcpt-card').textContent = card;
+      document.getElementById('rcpt-amount').textContent = `${amount > 0 ? '+' : ''}${amount} Tokens`;
+      document.getElementById('rcpt-balance').textContent = `${newBalance} Tokens`;
+
+      window.print();
     }
 
     function setAdminMessage(text, isError = false) {
@@ -483,9 +582,10 @@
       const location = document.getElementById('pos-location').value;
 
       try {
-        await recordTransaction(card, amount, `Deposit at ${location}`, location);
+        const newBal = await recordTransaction(card, amount, `Deposit at ${location}`, location);
         setAdminMessage(`Successfully deposited ${amount} tokens to card ${card}.`);
         document.getElementById('pos-amount').value = '';
+        printReceipt('Deposit', card, amount, location, newBal);
       } catch (err) {
         setAdminMessage(err.message, true);
       }
@@ -497,9 +597,10 @@
       const location = document.getElementById('pos-location').value;
 
       try {
-        await recordTransaction(card, amount, `Withdrawal at ${location}`, location);
+        const newBal = await recordTransaction(card, amount, `Withdrawal at ${location}`, location);
         setAdminMessage(`Successfully withdrew ${Math.abs(amount)} tokens from card ${card}.`);
         document.getElementById('pos-amount').value = '';
+        printReceipt('Withdrawal', card, amount, location, newBal);
       } catch (err) {
         setAdminMessage(err.message, true);
       }
@@ -544,7 +645,7 @@
     async function openScanner(targetInputElement) {
       targetInputForScan = targetInputElement;
       scannerModal.classList.remove('hidden');
-      scannerStatus.textContent = "Align card numbers inside box...";
+      scannerStatus.textContent = "Align numbers inside box...";
 
       try {
         videoStream = await navigator.mediaDevices.getUserMedia({
@@ -570,7 +671,6 @@
     document.getElementById('pos-scan-btn').addEventListener('click', () => openScanner(document.getElementById('pos-card')));
     document.getElementById('scanner-close-btn').addEventListener('click', closeScanner);
 
-    // MANUAL CAPTURE & OCR TRIGGER
     document.getElementById('scanner-capture-btn').addEventListener('click', async () => {
       if (!videoStream || !scannerVideo.videoWidth) {
         scannerStatus.textContent = "Camera stream not active.";
