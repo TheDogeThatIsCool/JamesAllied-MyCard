@@ -10,7 +10,7 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getDatabase, ref, push } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+    import { getDatabase, ref, push, get } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBbhOweEMmxYrlXiIlC830xKxbISfbqYSg",
@@ -46,6 +46,39 @@
       }
 
       try {
+        // 1. Check if the card is frozen
+        const freezeSnap = await get(ref(db, `cards/${card}/isFrozen`));
+        const isFrozen = freezeSnap.exists() ? freezeSnap.val() : false;
+
+        if (isFrozen) {
+          respond({
+            status: "error",
+            message: "account does not have permission to withdraw"
+          });
+          return;
+        }
+
+        // 2. Fetch existing transactions to sum up total balance
+        const transactionsSnap = await get(ref(db, `transactions/${card}`));
+        let currentBalance = 0;
+
+        if (transactionsSnap.exists()) {
+          const txData = transactionsSnap.val();
+          Object.values(txData).forEach((tx) => {
+            currentBalance += parseFloat(tx.amount || 0);
+          });
+        }
+
+        // 3. If withdrawing (negative amount), check if account has sufficient funds
+        if (amount < 0 && (currentBalance + amount) < 0) {
+          respond({
+            status: "error",
+            message: "account does not have permission to withdraw"
+          });
+          return;
+        }
+
+        // 4. Record transaction if checks pass
         const targetRef = ref(db, `transactions/${card}`);
         const newTx = await push(targetRef, {
           amount: amount,
